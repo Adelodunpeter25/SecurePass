@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <!-- Header -->
+  <div class="header">
+    <div class="header-content">
+      <h2>🔐 SecurePass</h2>
+      <div class="user-info">
+        <span id="userName">Loading...</span>
+        <button id="logoutBtn" class="logout-btn">Sign out</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Search and Actions -->
+  <div class="toolbar">
+    <div class="search-container">
+      <input type="text" id="searchInput" placeholder="Search passwords..." class="search-input">
+      <div class="search-icon">🔍</div>
+    </div>
+    <button id="addPasswordBtn" class="btn btn-primary">+ Add Password</button>
+  </div>
+
+  <!-- Password List -->
+  <div class="password-list" id="passwordList">
+    <div class="loading">Loading passwords...</div>
+  </div>
+
+  <!-- Add/Edit Modal -->
+  <div id="passwordModal" class="modal hidden">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h3 id="modalTitle">Add Password</h3>
+        <button id="closeModal" class="close-btn">×</button>
+      </div>
+      <div class="modal-body">
+        <div class="form-group">
+          <label>Website</label>
+          <input type="text" id="modalWebsite" placeholder="e.g., google.com">
+        </div>
+        <div class="form-group">
+          <label>Username/Email</label>
+          <input type="text" id="modalUsername" placeholder="Username or email">
+        </div>
+        <div class="form-group">
+          <label>Password</label>
+          <div class="password-input-container">
+            <input type="password" id="modalPassword" placeholder="Password">
+            <button type="button" id="generatePasswordBtn" class="generate-btn">Generate</button>
+            <button type="button" id="togglePasswordBtn" class="eye-btn">👁️‍🗨️</button>
+          </div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button id="cancelBtn" class="btn btn-secondary">Cancel</button>
+        <button id="savePasswordBtn" class="btn btn-primary">Save</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Delete Confirmation Modal -->
+  <div id="deleteModal" class="modal hidden">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h3>Delete Password</h3>
+        <button id="closeDeleteModal" class="close-btn">×</button>
+      </div>
+      <div class="modal-body">
+        <p>Are you sure you want to delete the password for <strong id="deleteWebsite"></strong>?</p>
+      </div>
+      <div class="modal-footer">
+        <button id="cancelDeleteBtn" class="btn btn-secondary">Cancel</button>
+        <button id="confirmDeleteBtn" class="btn btn-danger">Delete</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="dashboard.js"></script>
+</body>
+</html>

@@ -1,99 +1,41 @@
 class SecurePassBackground {
   constructor() {
+    this.apiUrl = 'http://localhost:3000/api';
+    this.authToken = null;
     this.masterKey = null;
-    this.isLoggedIn = false;
-    this.dbName = 'securepass_db';
     this.init();
   }
 
-  init() {
+  async init() {
     chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
       this.handleMessage(request, sender, sendResponse);
       return true;
     });
-    
-    this.initDatabase();
-  }
 
-  async initDatabase() {
-    // Create tables if they don't exist
-    await this.executeSQL(`
-      CREATE TABLE IF NOT EXISTS users (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        master_password_hash TEXT NOT NULL,
-        created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-      )
-    `);
-
-    await this.executeSQL(`
-      CREATE TABLE IF NOT EXISTS passwords (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        website TEXT NOT NULL,
-        username TEXT,
-        password_blob TEXT NOT NULL,
-        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-        updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
-      )
-    `);
-  }
-
-  async executeSQL(query, params = []) {
-    return new Promise((resolve, reject) => {
-      chrome.storage.local.get([this.dbName], (result) => {
-        let db = result[this.dbName] || { users: [], passwords: [] };
-        
-        try {
-          if (query.includes('CREATE TABLE')) {
-            // Tables are created in memory structure
-            resolve();
-          } else if (query.includes('INSERT INTO users')) {
-            const id = db.users.length + 1;
-            db.users.push({
-              id,
-              master_password_hash: params[0],
-              created_at: new Date().toISOString()
-            });
-            chrome.storage.local.set({ [this.dbName]: db }, () => resolve({ insertId: id }));
-          } else if (query.includes('SELECT * FROM users')) {
-            resolve({ rows: db.users });
-          } else if (query.includes('INSERT INTO passwords')) {
-            const id = db.passwords.length + 1;
-            db.passwords.push({
-              id,
-              website: params[0],
-              username: params[1],
-              password_blob: params[2],
-              created_at: new Date().toISOString(),
-              updated_at: new Date().toISOString()
-            });
-            chrome.storage.local.set({ [this.dbName]: db }, () => resolve({ insertId: id }));
-          } else if (query.includes('SELECT * FROM passwords WHERE website')) {
-            const website = params[0];
-            const passwords = db.passwords.filter(p => p.website === website);
-            resolve({ rows: passwords });
-          } else if (query.includes('SELECT * FROM passwords')) {
-            resolve({ rows: db.passwords });
-          }
-        } catch (error) {
-          reject(error);
-        }
-      });
-    });
+    // Check for existing session
+    const result = await chrome.storage.local.get(['authToken', 'masterKey']);
+    this.authToken = result.authToken;
+    this.masterKey = result.masterKey;
   }
 
   async handleMessage(request, sender, sendResponse) {
     try {
       switch (request.action) {
-        case 'checkLoginState':
-          sendResponse({ isLoggedIn: this.isLoggedIn });
+        case 'checkAuth':
+          const authState = await this.checkAuthState();
+          sendResponse(authState);
           break;
-        case 'setupMasterPassword':
-          await this.setupMasterPassword(request.password);
+        case 'signup':
+          await this.signup(request.name, request.email, request.password);
           sendResponse({ success: true });
           break;
-        case 'login':
-          const loginResult = await this.login(request.password);
-          sendResponse(loginResult);
+        case 'signin':
+          await this.signin(request.email, request.password);
+          sendResponse({ success: true });
+          break;
+        case 'signout':
+          await this.signout();
+          sendResponse({ success: true });
           break;
         case 'getCredentials':
           const credentials = await this.getCredentials(request.domain);
@@ -103,97 +45,147 @@ class SecurePassBackground {
           await this.saveCredentials(request.data);
           sendResponse({ success: true });
           break;
-        case 'logout':
-          this.logout();
-          sendResponse({ success: true });
-          break;
       }
     } catch (error) {
       sendResponse({ error: error.message });
     }
   }
 
-  async setupMasterPassword(password) {
-    const hashedPassword = await this.hashPassword(password);
-    await this.executeSQL(
-      'INSERT INTO users (master_password_hash) VALUES (?)',
-      [hashedPassword]
-    );
-    
-    this.masterKey = password;
-    this.isLoggedIn = true;
-  }
-
-  async login(password) {
-    const result = await this.executeSQL('SELECT * FROM users');
-    
-    if (result.rows.length === 0) {
-      throw new Error('No master password set. Please set up SecurePass first.');
+  async checkAuthState() {
+    if (!this.authToken) {
+      return { isAuthenticated: false, user: null };
     }
 
-    const user = result.rows[0];
-    const isValid = await this.verifyPassword(password, user.master_password_hash);
-    
-    if (!isValid) {
-      throw new Error('Invalid master password');
-    }
+    try {
+      // Verify token with backend
+      const response = await fetch(`${this.apiUrl}/verify`, {
+        headers: {
+          'Authorization': `Bearer ${this.authToken}`
+        }
+      });
 
-    this.masterKey = password;
-    this.isLoggedIn = true;
-    return { success: true };
+      if (response.ok) {
+        const user = await response.json();
+        return { isAuthenticated: true, user };
+      } else {
+        // Token invalid, clear it
+        await this.signout();
+        return { isAuthenticated: false, user: null };
+      }
+    } catch (error) {
+      return { isAuthenticated: false, user: null };
+    }
   }
 
-  logout() {
+  async signup(name, email, password) {
+    const response = await fetch(`${this.apiUrl}/register`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({ name, email, password })
+    });
+
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.error || 'Signup failed');
+    }
+
+    const data = await response.json();
+    this.authToken = data.token;
+    this.masterKey = password;
+
+    // Store session
+    await chrome.storage.local.set({
+      authToken: this.authToken,
+      masterKey: this.masterKey,
+      user: { name, email }
+    });
+  }
+
+  async signin(email, password) {
+    const response = await fetch(`${this.apiUrl}/login`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({ email, password })
+    });
+
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.error || 'Signin failed');
+    }
+
+    const data = await response.json();
+    this.authToken = data.token;
+    this.masterKey = password;
+
+    // Store session
+    await chrome.storage.local.set({
+      authToken: this.authToken,
+      masterKey: this.masterKey,
+      user: { name: data.name, email }
+    });
+  }
+
+  async signout() {
+    this.authToken = null;
     this.masterKey = null;
-    this.isLoggedIn = false;
+    await chrome.storage.local.remove(['authToken', 'masterKey', 'user']);
   }
 
   async getCredentials(domain) {
-    if (!this.isLoggedIn) {
-      throw new Error('Not logged in');
+    if (!this.authToken) {
+      throw new Error('Not authenticated');
     }
 
-    const result = await this.executeSQL(
-      'SELECT * FROM passwords WHERE website = ?',
-      [domain]
-    );
+    const response = await fetch(`${this.apiUrl}/passwords/${domain}`, {
+      headers: {
+        'Authorization': `Bearer ${this.authToken}`
+      }
+    });
 
-    if (result.rows.length === 0) {
+    if (response.status === 404) {
       return null;
     }
 
-    const passwordData = result.rows[0];
-    const decrypted = await this.decrypt(passwordData.password_blob);
+    if (!response.ok) {
+      throw new Error('Failed to fetch credentials');
+    }
+
+    const data = await response.json();
+    const decrypted = await this.decrypt(data.password_blob);
     
     return {
-      username: passwordData.username,
+      username: data.username,
       password: decrypted
     };
   }
 
-  async saveCredentials(credentialData) {
-    if (!this.isLoggedIn) {
-      throw new Error('Not logged in');
+  async saveCredentials(data) {
+    if (!this.authToken) {
+      throw new Error('Not authenticated');
     }
 
-    const encrypted = await this.encrypt(credentialData.password);
+    const encrypted = await this.encrypt(data.password);
     
-    await this.executeSQL(
-      'INSERT INTO passwords (website, username, password_blob) VALUES (?, ?, ?)',
-      [credentialData.domain, credentialData.username, encrypted]
-    );
-  }
+    const response = await fetch(`${this.apiUrl}/passwords`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${this.authToken}`
+      },
+      body: JSON.stringify({
+        website: data.domain,
+        username: data.username,
+        password_blob: encrypted
+      })
+    });
 
-  async hashPassword(password) {
-    const encoder = new TextEncoder();
-    const data = encoder.encode(password);
-    const hash = await crypto.subtle.digest('SHA-256', data);
-    return btoa(String.fromCharCode(...new Uint8Array(hash)));
-  }
-
-  async verifyPassword(password, hash) {
-    const hashedInput = await this.hashPassword(password);
-    return hashedInput === hash;
+    if (!response.ok) {
+      throw new Error('Failed to save credentials');
+    }
   }
 
   async encrypt(plaintext) {

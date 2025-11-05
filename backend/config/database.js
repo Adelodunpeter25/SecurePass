@@ -1,11 +1,37 @@
-const { Pool } = require('pg');
+const sqlite3 = require('sqlite3').verbose();
+const path = require('path');
 
-const pool = new Pool({
-  user: process.env.DB_USER || 'postgres',
-  host: process.env.DB_HOST || 'localhost',
-  database: process.env.DB_NAME || 'securepass',
-  password: process.env.DB_PASSWORD || 'password',
-  port: process.env.DB_PORT || 5432,
+const dbPath = path.join(__dirname, '..', 'securepass.db');
+const db = new sqlite3.Database(dbPath);
+
+// Initialize tables
+db.serialize(() => {
+  db.run(`
+    CREATE TABLE IF NOT EXISTS users (
+      id TEXT PRIMARY KEY,
+      name TEXT NOT NULL,
+      email TEXT UNIQUE NOT NULL,
+      password_hash TEXT NOT NULL,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    )
+  `);
+
+  db.run(`
+    CREATE TABLE IF NOT EXISTS passwords (
+      id TEXT PRIMARY KEY,
+      user_id TEXT NOT NULL,
+      website TEXT NOT NULL,
+      username TEXT,
+      password_blob TEXT NOT NULL,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE
+    )
+  `);
+
+  db.run(`CREATE INDEX IF NOT EXISTS idx_passwords_user_id ON passwords(user_id)`);
+  db.run(`CREATE INDEX IF NOT EXISTS idx_passwords_website ON passwords(website)`);
+  db.run(`CREATE INDEX IF NOT EXISTS idx_passwords_user_website ON passwords(user_id, website)`);
 });
 
-module.exports = pool;
+module.exports = db;

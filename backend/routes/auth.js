@@ -1,8 +1,8 @@
 const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
 const { v4: uuidv4 } = require('uuid');
-const pool = require('../config/database');
-const { JWT_SECRET } = require('../middleware/auth');
+const db = require('../config/database');
+const { authenticate, JWT_SECRET } = require('../middleware/auth');
 
 async function authRoutes(fastify, options) {
   fastify.post('/register', async (request, reply) => {
@@ -12,10 +12,16 @@ async function authRoutes(fastify, options) {
       const hashedPassword = await bcrypt.hash(password, 10);
       const userId = uuidv4();
       
-      await pool.query(
-        'INSERT INTO users (id, name, email, password_hash, created_at) VALUES ($1, $2, $3, $4, NOW())',
-        [userId, name, email, hashedPassword]
-      );
+      await new Promise((resolve, reject) => {
+        db.run(
+          'INSERT INTO users (id, name, email, password_hash) VALUES (?, ?, ?, ?)',
+          [userId, name, email, hashedPassword],
+          function(err) {
+            if (err) reject(err);
+            else resolve();
+          }
+        );
+      });
       
       const token = jwt.sign({ userId, email, name }, JWT_SECRET);
       reply.send({ token, userId, name });
@@ -28,8 +34,12 @@ async function authRoutes(fastify, options) {
     const { email, password } = request.body;
     
     try {
-      const result = await pool.query('SELECT * FROM users WHERE email = $1', [email]);
-      const user = result.rows[0];
+      const user = await new Promise((resolve, reject) => {
+        db.get('SELECT * FROM users WHERE email = ?', [email], (err, row) => {
+          if (err) reject(err);
+          else resolve(row);
+        });
+      });
       
       if (!user || !await bcrypt.compare(password, user.password_hash)) {
         reply.code(401).send({ error: 'Invalid credentials' });
@@ -41,6 +51,13 @@ async function authRoutes(fastify, options) {
     } catch (error) {
       reply.code(400).send({ error: 'Login failed' });
     }
+  });
+
+  fastify.get('/verify', { preHandler: authenticate }, async (request, reply) => {
+    reply.send({
+      email: request.user.email,
+      name: request.user.name
+    });
   });
 }
 

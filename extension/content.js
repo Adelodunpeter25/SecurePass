@@ -5,33 +5,20 @@ class SecurePassContent {
   }
 
   init() {
+    this.detectPasswordFields();
     this.detectLoginForms();
     this.observeFormChanges();
-    this.detectPasswordFields();
-  }
-
-  detectLoginForms() {
-    const passwordFields = document.querySelectorAll('input[type="password"]');
-    
-    passwordFields.forEach(passwordField => {
-      const form = passwordField.closest('form');
-      const usernameField = this.findUsernameField(form, passwordField);
-      
-      if (usernameField) {
-        this.addAutoFillButton(usernameField, passwordField);
-      }
-    });
   }
 
   detectPasswordFields() {
     const passwordFields = document.querySelectorAll('input[type="password"]');
     
     passwordFields.forEach(passwordField => {
-      this.enhancePasswordField(passwordField);
+      this.addPasswordEyeIcon(passwordField);
     });
   }
 
-  enhancePasswordField(passwordField) {
+  addPasswordEyeIcon(passwordField) {
     // Skip if already enhanced
     if (passwordField.dataset.securepassEnhanced) return;
     passwordField.dataset.securepassEnhanced = 'true';
@@ -42,33 +29,24 @@ class SecurePassContent {
     passwordField.parentNode.insertBefore(wrapper, passwordField);
     wrapper.appendChild(passwordField);
 
-    // Add generate password button
-    const generateBtn = this.createPasswordButton('🎲', 'Generate password');
-    generateBtn.addEventListener('click', (e) => {
+    // Add eye icon for show/hide password
+    const eyeIcon = this.createEyeIcon();
+    wrapper.appendChild(eyeIcon);
+
+    let isPasswordVisible = false;
+    eyeIcon.addEventListener('click', (e) => {
       e.preventDefault();
       e.stopPropagation();
-      this.generatePasswordForField(passwordField);
+      
+      isPasswordVisible = !isPasswordVisible;
+      passwordField.type = isPasswordVisible ? 'text' : 'password';
+      eyeIcon.innerHTML = isPasswordVisible ? '👁️' : '👁️‍🗨️';
     });
 
-    // Add save password button (appears after typing)
-    const saveBtn = this.createPasswordButton('💾', 'Save password');
-    saveBtn.style.right = '35px';
-    saveBtn.style.display = 'none';
-    saveBtn.addEventListener('click', (e) => {
-      e.preventDefault();
-      e.stopPropagation();
-      this.savePasswordFromField(passwordField);
-    });
-
-    wrapper.appendChild(generateBtn);
-    wrapper.appendChild(saveBtn);
-
-    // Show save button when password is entered
+    // Auto-save functionality
     passwordField.addEventListener('input', () => {
       if (passwordField.value.length > 0) {
-        saveBtn.style.display = 'block';
-      } else {
-        saveBtn.style.display = 'none';
+        this.showSavePrompt(passwordField);
       }
     });
 
@@ -83,46 +61,185 @@ class SecurePassContent {
     }
   }
 
-  createPasswordButton(icon, title) {
-    const button = document.createElement('div');
-    button.innerHTML = icon;
-    button.title = title;
-    button.style.cssText = `
+  createEyeIcon() {
+    const icon = document.createElement('div');
+    icon.innerHTML = '👁️‍🗨️';
+    icon.title = 'Show password';
+    icon.style.cssText = `
       position: absolute;
-      right: 8px;
+      right: 12px;
       top: 50%;
       transform: translateY(-50%);
       cursor: pointer;
       z-index: 10000;
-      background: #fff;
-      border: 1px solid #ddd;
-      border-radius: 4px;
-      padding: 4px 6px;
-      font-size: 12px;
-      box-shadow: 0 1px 3px rgba(0,0,0,0.1);
-      transition: all 0.2s;
+      font-size: 16px;
+      user-select: none;
+      opacity: 0.6;
+      transition: opacity 0.2s;
     `;
     
+    icon.addEventListener('mouseenter', () => {
+      icon.style.opacity = '1';
+    });
+    
+    icon.addEventListener('mouseleave', () => {
+      icon.style.opacity = '0.6';
+    });
+
+    return icon;
+  }
+
+  async showSavePrompt(passwordField) {
+    const authState = await this.checkAuthState();
+    if (!authState.isAuthenticated) return;
+
+    const form = passwordField.closest('form');
+    const usernameField = this.findUsernameField(form, passwordField);
+    
+    if (!usernameField || !usernameField.value) return;
+
+    // Check if already saved
+    const existing = await this.getExistingCredentials();
+    if (existing && existing.username === usernameField.value) return;
+
+    // Show save prompt
+    this.showSaveNotification(passwordField, usernameField);
+  }
+
+  showSaveNotification(passwordField, usernameField) {
+    // Remove existing notification
+    const existing = document.querySelector('.securepass-save-prompt');
+    if (existing) existing.remove();
+
+    const notification = document.createElement('div');
+    notification.className = 'securepass-save-prompt';
+    notification.innerHTML = `
+      <div style="display: flex; align-items: center; gap: 8px;">
+        <span>🔐</span>
+        <span>Save password to SecurePass?</span>
+        <button id="saveYes" style="background: #667eea; color: white; border: none; padding: 4px 8px; border-radius: 4px; cursor: pointer;">Save</button>
+        <button id="saveNo" style="background: #6b7280; color: white; border: none; padding: 4px 8px; border-radius: 4px; cursor: pointer;">Not now</button>
+      </div>
+    `;
+    
+    notification.style.cssText = `
+      position: fixed;
+      top: 20px;
+      right: 20px;
+      background: white;
+      border: 1px solid #e5e7eb;
+      border-radius: 8px;
+      padding: 12px;
+      font-size: 14px;
+      z-index: 10001;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+      animation: slideIn 0.3s ease-out;
+    `;
+    
+    document.body.appendChild(notification);
+    
+    // Handle save action
+    notification.querySelector('#saveYes').addEventListener('click', () => {
+      this.savePasswordFromField(passwordField);
+      notification.remove();
+    });
+    
+    notification.querySelector('#saveNo').addEventListener('click', () => {
+      notification.remove();
+    });
+    
+    // Auto-remove after 10 seconds
+    setTimeout(() => {
+      if (notification.parentNode) {
+        notification.remove();
+      }
+    }, 10000);
+  }
+
+  detectLoginForms() {
+    const passwordFields = document.querySelectorAll('input[type="password"]');
+    
+    passwordFields.forEach(passwordField => {
+      const form = passwordField.closest('form');
+      const usernameField = this.findUsernameField(form, passwordField);
+      
+      if (usernameField) {
+        this.addAutoFillButton(usernameField);
+      }
+    });
+  }
+
+  addAutoFillButton(usernameField) {
+    // Skip if button already exists
+    if (usernameField.parentNode.querySelector('.securepass-autofill')) return;
+
+    const button = document.createElement('div');
+    button.innerHTML = '🔐';
+    button.className = 'securepass-autofill';
+    button.title = 'Auto-fill with SecurePass';
+    button.style.cssText = `
+      position: absolute;
+      right: 12px;
+      top: 50%;
+      transform: translateY(-50%);
+      cursor: pointer;
+      z-index: 10000;
+      font-size: 16px;
+      opacity: 0.6;
+      transition: opacity 0.2s;
+    `;
+    
+    usernameField.style.position = 'relative';
+    usernameField.parentNode.style.position = 'relative';
+    usernameField.parentNode.appendChild(button);
+    
     button.addEventListener('mouseenter', () => {
-      button.style.background = '#f0f0f0';
-      button.style.transform = 'translateY(-50%) scale(1.1)';
+      button.style.opacity = '1';
     });
     
     button.addEventListener('mouseleave', () => {
-      button.style.background = '#fff';
-      button.style.transform = 'translateY(-50%) scale(1)';
+      button.style.opacity = '0.6';
     });
-
-    return button;
+    
+    button.addEventListener('click', () => {
+      this.requestCredentials(usernameField);
+    });
   }
 
-  generatePasswordForField(passwordField) {
-    const password = this.generateStrongPassword();
-    passwordField.value = password;
-    passwordField.dispatchEvent(new Event('input', { bubbles: true }));
-    
-    // Show notification
-    this.showNotification('Strong password generated!', 'success');
+  async requestCredentials(usernameField) {
+    try {
+      const authState = await this.checkAuthState();
+      if (!authState.isAuthenticated) {
+        this.showNotification('Please sign in to SecurePass first', 'error');
+        return;
+      }
+
+      const response = await chrome.runtime.sendMessage({
+        action: 'getCredentials',
+        domain: this.domain
+      });
+      
+      if (response.credentials) {
+        const passwordField = this.findPasswordField(usernameField);
+        
+        usernameField.value = response.credentials.username;
+        if (passwordField) {
+          passwordField.value = response.credentials.password;
+        }
+        
+        // Trigger change events
+        [usernameField, passwordField].filter(Boolean).forEach(field => {
+          field.dispatchEvent(new Event('input', { bubbles: true }));
+          field.dispatchEvent(new Event('change', { bubbles: true }));
+        });
+        
+        this.showNotification('Credentials filled from SecurePass!', 'success');
+      } else {
+        this.showNotification('No saved credentials for this site', 'info');
+      }
+    } catch (error) {
+      this.showNotification('Failed to get credentials', 'error');
+    }
   }
 
   async savePasswordFromField(passwordField) {
@@ -130,11 +247,15 @@ class SecurePassContent {
     const usernameField = this.findUsernameField(form, passwordField);
     
     if (!usernameField || !usernameField.value || !passwordField.value) {
-      this.showNotification('Please fill in both username and password', 'error');
       return;
     }
 
     try {
+      const authState = await this.checkAuthState();
+      if (!authState.isAuthenticated) {
+        return;
+      }
+
       await chrome.runtime.sendMessage({
         action: 'saveCredentials',
         data: {
@@ -146,33 +267,28 @@ class SecurePassContent {
       
       this.showNotification('Password saved to SecurePass!', 'success');
     } catch (error) {
-      this.showNotification('Failed to save password', 'error');
+      console.error('Failed to save password:', error);
     }
   }
 
-  generateStrongPassword() {
-    const length = 16;
-    const uppercase = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
-    const lowercase = 'abcdefghijklmnopqrstuvwxyz';
-    const numbers = '0123456789';
-    const symbols = '!@#$%^&*()_+-=[]{}|;:,.<>?';
-    
-    let password = '';
-    
-    // Ensure at least one character from each category
-    password += uppercase[Math.floor(Math.random() * uppercase.length)];
-    password += lowercase[Math.floor(Math.random() * lowercase.length)];
-    password += numbers[Math.floor(Math.random() * numbers.length)];
-    password += symbols[Math.floor(Math.random() * symbols.length)];
-    
-    // Fill the rest randomly
-    const allChars = uppercase + lowercase + numbers + symbols;
-    for (let i = 4; i < length; i++) {
-      password += allChars[Math.floor(Math.random() * allChars.length)];
+  async checkAuthState() {
+    try {
+      return await chrome.runtime.sendMessage({ action: 'checkAuth' });
+    } catch (error) {
+      return { isAuthenticated: false };
     }
-    
-    // Shuffle the password
-    return password.split('').sort(() => Math.random() - 0.5).join('');
+  }
+
+  async getExistingCredentials() {
+    try {
+      const response = await chrome.runtime.sendMessage({
+        action: 'getCredentials',
+        domain: this.domain
+      });
+      return response.credentials;
+    } catch (error) {
+      return null;
+    }
   }
 
   findUsernameField(form, passwordField) {
@@ -195,74 +311,10 @@ class SecurePassContent {
     return null;
   }
 
-  addAutoFillButton(usernameField, passwordField) {
-    // Skip if button already exists
-    if (usernameField.parentNode.querySelector('.securepass-autofill')) return;
-
-    const button = document.createElement('div');
-    button.innerHTML = '🔐';
-    button.className = 'securepass-autofill';
-    button.title = 'Auto-fill with SecurePass';
-    button.style.cssText = `
-      position: absolute;
-      right: 8px;
-      top: 50%;
-      transform: translateY(-50%);
-      cursor: pointer;
-      z-index: 10000;
-      background: #667eea;
-      color: white;
-      border: none;
-      border-radius: 4px;
-      padding: 4px 6px;
-      font-size: 12px;
-      box-shadow: 0 2px 4px rgba(0,0,0,0.2);
-      transition: all 0.2s;
-    `;
-    
-    usernameField.style.position = 'relative';
-    usernameField.parentNode.style.position = 'relative';
-    usernameField.parentNode.appendChild(button);
-    
-    button.addEventListener('mouseenter', () => {
-      button.style.background = '#5a67d8';
-      button.style.transform = 'translateY(-50%) scale(1.1)';
-    });
-    
-    button.addEventListener('mouseleave', () => {
-      button.style.background = '#667eea';
-      button.style.transform = 'translateY(-50%) scale(1)';
-    });
-    
-    button.addEventListener('click', () => {
-      this.requestCredentials(usernameField, passwordField);
-    });
-  }
-
-  async requestCredentials(usernameField, passwordField) {
-    try {
-      const response = await chrome.runtime.sendMessage({
-        action: 'getCredentials',
-        domain: this.domain
-      });
-      
-      if (response.credentials) {
-        usernameField.value = response.credentials.username;
-        passwordField.value = response.credentials.password;
-        
-        // Trigger change events
-        [usernameField, passwordField].forEach(field => {
-          field.dispatchEvent(new Event('input', { bubbles: true }));
-          field.dispatchEvent(new Event('change', { bubbles: true }));
-        });
-        
-        this.showNotification('Credentials filled from SecurePass!', 'success');
-      } else {
-        this.showNotification('No saved credentials for this site', 'info');
-      }
-    } catch (error) {
-      this.showNotification('Failed to get credentials', 'error');
-    }
+  findPasswordField(usernameField) {
+    const form = usernameField.closest('form');
+    return form?.querySelector('input[type="password"]') || 
+           document.querySelector('input[type="password"]');
   }
 
   showNotification(message, type) {
@@ -296,27 +348,31 @@ class SecurePassContent {
     `;
     
     // Add animation
-    const style = document.createElement('style');
-    style.textContent = `
-      @keyframes slideIn {
-        from { transform: translateX(100%); opacity: 0; }
-        to { transform: translateX(0); opacity: 1; }
-      }
-    `;
-    document.head.appendChild(style);
+    if (!document.querySelector('#securepass-styles')) {
+      const style = document.createElement('style');
+      style.id = 'securepass-styles';
+      style.textContent = `
+        @keyframes slideIn {
+          from { transform: translateX(100%); opacity: 0; }
+          to { transform: translateX(0); opacity: 1; }
+        }
+      `;
+      document.head.appendChild(style);
+    }
     
     document.body.appendChild(notification);
     
     setTimeout(() => {
-      notification.remove();
-      style.remove();
+      if (notification.parentNode) {
+        notification.remove();
+      }
     }, 3000);
   }
 
   observeFormChanges() {
     const observer = new MutationObserver(() => {
-      this.detectLoginForms();
       this.detectPasswordFields();
+      this.detectLoginForms();
     });
     
     observer.observe(document.body, {

@@ -8,11 +8,11 @@
     "dev": "nodemon server.js"
   },
   "dependencies": {
-    "fastify": "^4.24.3",
     "@fastify/cors": "^8.4.0",
-    "pg": "^8.11.3",
     "bcrypt": "^5.1.1",
+    "fastify": "^4.24.3",
     "jsonwebtoken": "^9.0.2",
+    "sqlite3": "^5.1.7",
     "uuid": "^9.0.1"
   },
   "devDependencies": {

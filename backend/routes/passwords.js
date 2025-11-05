@@ -1,5 +1,5 @@
 const { v4: uuidv4 } = require('uuid');
-const pool = require('../config/database');
+const db = require('../config/database');
 const { authenticate } = require('../middleware/auth');
 
 async function passwordRoutes(fastify, options) {
@@ -8,17 +8,23 @@ async function passwordRoutes(fastify, options) {
     const { userId } = request.user;
     
     try {
-      const result = await pool.query(
-        'SELECT * FROM passwords WHERE user_id = $1 AND website = $2',
-        [userId, domain]
-      );
+      const password = await new Promise((resolve, reject) => {
+        db.get(
+          'SELECT * FROM passwords WHERE user_id = ? AND website = ?',
+          [userId, domain],
+          (err, row) => {
+            if (err) reject(err);
+            else resolve(row);
+          }
+        );
+      });
       
-      if (result.rows.length === 0) {
+      if (!password) {
         reply.code(404).send({ error: 'No credentials found' });
         return;
       }
       
-      reply.send(result.rows[0]);
+      reply.send(password);
     } catch (error) {
       reply.code(500).send({ error: 'Failed to fetch credentials' });
     }
@@ -31,10 +37,16 @@ async function passwordRoutes(fastify, options) {
     try {
       const passwordId = uuidv4();
       
-      await pool.query(
-        'INSERT INTO passwords (id, user_id, website, username, password_blob, created_at, updated_at) VALUES ($1, $2, $3, $4, $5, NOW(), NOW())',
-        [passwordId, userId, website, username, password_blob]
-      );
+      await new Promise((resolve, reject) => {
+        db.run(
+          'INSERT INTO passwords (id, user_id, website, username, password_blob) VALUES (?, ?, ?, ?, ?)',
+          [passwordId, userId, website, username, password_blob],
+          function(err) {
+            if (err) reject(err);
+            else resolve();
+          }
+        );
+      });
       
       reply.send({ success: true, id: passwordId });
     } catch (error) {
@@ -46,12 +58,18 @@ async function passwordRoutes(fastify, options) {
     const { userId } = request.user;
     
     try {
-      const result = await pool.query(
-        'SELECT id, website, username, created_at, updated_at FROM passwords WHERE user_id = $1 ORDER BY updated_at DESC',
-        [userId]
-      );
+      const passwords = await new Promise((resolve, reject) => {
+        db.all(
+          'SELECT id, website, username, created_at, updated_at FROM passwords WHERE user_id = ? ORDER BY updated_at DESC',
+          [userId],
+          (err, rows) => {
+            if (err) reject(err);
+            else resolve(rows);
+          }
+        );
+      });
       
-      reply.send(result.rows);
+      reply.send(passwords);
     } catch (error) {
       reply.code(500).send({ error: 'Failed to fetch passwords' });
     }
