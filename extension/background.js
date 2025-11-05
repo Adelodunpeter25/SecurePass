@@ -12,10 +12,14 @@ class SecurePassBackground {
       return true;
     });
 
-    // Check for existing session
+    // Load existing session on startup
+    await this.loadStoredSession();
+  }
+
+  async loadStoredSession() {
     const result = await chrome.storage.local.get(['authToken', 'masterKey']);
-    this.authToken = result.authToken;
-    this.masterKey = result.masterKey;
+    this.authToken = result.authToken || null;
+    this.masterKey = result.masterKey || null;
   }
 
   async handleMessage(request, sender, sendResponse) {
@@ -45,6 +49,18 @@ class SecurePassBackground {
           await this.saveCredentials(request.data);
           sendResponse({ success: true });
           break;
+        case 'getAllPasswords':
+          const allPasswords = await this.getAllPasswords();
+          sendResponse({ passwords: allPasswords });
+          break;
+        case 'updatePassword':
+          await this.updatePassword(request.id, request.data);
+          sendResponse({ success: true });
+          break;
+        case 'deletePassword':
+          await this.deletePassword(request.id);
+          sendResponse({ success: true });
+          break;
       }
     } catch (error) {
       sendResponse({ error: error.message });
@@ -52,12 +68,27 @@ class SecurePassBackground {
   }
 
   async checkAuthState() {
-    if (!this.authToken) {
+    // Always load fresh from storage
+    await this.loadStoredSession();
+    
+    const result = await chrome.storage.local.get(['isAuthenticated', 'user', 'lastVerified']);
+    
+    if (!this.authToken || !result.isAuthenticated) {
       return { isAuthenticated: false, user: null };
     }
 
+    // Check if we verified recently (within last 5 minutes for popup reopens)
+    const now = Date.now();
+    const lastVerified = result.lastVerified || 0;
+    const fiveMinutes = 5 * 60 * 1000;
+
+    if (now - lastVerified < fiveMinutes) {
+      // Recent verification, skip backend call for popup reopens
+      return { isAuthenticated: true, user: result.user };
+    }
+
+    // Verify with backend for fresh sessions or after 5 minutes
     try {
-      // Verify token with backend
       const response = await fetch(`${this.apiUrl}/verify`, {
         headers: {
           'Authorization': `Bearer ${this.authToken}`
@@ -66,13 +97,18 @@ class SecurePassBackground {
 
       if (response.ok) {
         const user = await response.json();
+        // Update last verified timestamp
+        await chrome.storage.local.set({ lastVerified: now });
         return { isAuthenticated: true, user };
       } else {
-        // Token invalid, clear it
+        // Token invalid, clear session
         await this.signout();
         return { isAuthenticated: false, user: null };
       }
     } catch (error) {
+      // Network error - backend is down, clear session
+      console.error('Backend is not running');
+      await this.signout();
       return { isAuthenticated: false, user: null };
     }
   }
@@ -95,11 +131,13 @@ class SecurePassBackground {
     this.authToken = data.token;
     this.masterKey = password;
 
-    // Store session
+    // Store session persistently
     await chrome.storage.local.set({
       authToken: this.authToken,
       masterKey: this.masterKey,
-      user: { name, email }
+      user: { name, email },
+      isAuthenticated: true,
+      lastVerified: Date.now()
     });
   }
 
@@ -121,18 +159,20 @@ class SecurePassBackground {
     this.authToken = data.token;
     this.masterKey = password;
 
-    // Store session
+    // Store session persistently
     await chrome.storage.local.set({
       authToken: this.authToken,
       masterKey: this.masterKey,
-      user: { name: data.name, email }
+      user: { name: data.name, email },
+      isAuthenticated: true,
+      lastVerified: Date.now()
     });
   }
 
   async signout() {
     this.authToken = null;
     this.masterKey = null;
-    await chrome.storage.local.remove(['authToken', 'masterKey', 'user']);
+    await chrome.storage.local.clear();
   }
 
   async getCredentials(domain) {
@@ -185,6 +225,66 @@ class SecurePassBackground {
 
     if (!response.ok) {
       throw new Error('Failed to save credentials');
+    }
+  }
+
+  async getAllPasswords() {
+    if (!this.authToken) {
+      throw new Error('Not authenticated');
+    }
+
+    const response = await fetch(`${this.apiUrl}/passwords`, {
+      headers: {
+        'Authorization': `Bearer ${this.authToken}`
+      }
+    });
+
+    if (!response.ok) {
+      throw new Error('Failed to fetch passwords');
+    }
+
+    return await response.json();
+  }
+
+  async updatePassword(id, data) {
+    if (!this.authToken) {
+      throw new Error('Not authenticated');
+    }
+
+    const encrypted = await this.encrypt(data.password);
+    
+    const response = await fetch(`${this.apiUrl}/passwords/${id}`, {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${this.authToken}`
+      },
+      body: JSON.stringify({
+        website: data.website,
+        username: data.username,
+        password_blob: encrypted
+      })
+    });
+
+    if (!response.ok) {
+      throw new Error('Failed to update password');
+    }
+  }
+
+  async deletePassword(id) {
+    if (!this.authToken) {
+      throw new Error('Not authenticated');
+    }
+
+    const response = await fetch(`${this.apiUrl}/passwords/${id}`, {
+      method: 'DELETE',
+      headers: {
+        'Authorization': `Bearer ${this.authToken}`
+      }
+    });
+
+    if (!response.ok) {
+      throw new Error('Failed to delete password');
     }
   }
 

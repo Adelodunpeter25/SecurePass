@@ -10,33 +10,53 @@ class SecurePassPopup {
   }
 
   bindEvents() {
-    document.getElementById('authBtn').addEventListener('click', () => this.handleAuth());
-    document.getElementById('toggleAuth').addEventListener('click', () => this.toggleAuthMode());
-    document.getElementById('logoutBtn').addEventListener('click', () => this.signout());
-    document.getElementById('generateBtn').addEventListener('click', () => this.generatePassword());
+    const authBtn = document.getElementById('authBtn');
+    const toggleAuth = document.getElementById('toggleAuth');
+    const logoutBtn = document.getElementById('logoutBtn');
+    const generateBtn = document.getElementById('generateBtn');
+    const authPassword = document.getElementById('authPassword');
+    const eyeIcon = document.getElementById('eyeIcon');
+
+    if (authBtn) {
+      authBtn.addEventListener('click', () => this.handleAuth());
+    }
     
-    document.getElementById('authPassword').addEventListener('keypress', (e) => {
-      if (e.key === 'Enter') this.handleAuth();
-    });
+    if (toggleAuth) {
+      toggleAuth.addEventListener('click', () => this.toggleAuthMode());
+    }
+    
+    if (logoutBtn) {
+      logoutBtn.addEventListener('click', () => this.signout());
+    }
+    
+    if (generateBtn) {
+      generateBtn.addEventListener('click', () => this.generatePassword());
+    }
+    
+    if (authPassword) {
+      authPassword.addEventListener('keypress', (e) => {
+        if (e.key === 'Enter') this.handleAuth();
+      });
+    }
 
     // Eye icon functionality
-    const eyeIcon = document.getElementById('eyeIcon');
-    const passwordField = document.getElementById('authPassword');
-    let isPasswordVisible = false;
+    if (eyeIcon && authPassword) {
+      let isPasswordVisible = false;
 
-    eyeIcon.addEventListener('click', () => {
-      isPasswordVisible = !isPasswordVisible;
-      passwordField.type = isPasswordVisible ? 'text' : 'password';
-      eyeIcon.innerHTML = isPasswordVisible ? '👁️' : '👁️‍🗨️';
-    });
+      eyeIcon.addEventListener('click', () => {
+        isPasswordVisible = !isPasswordVisible;
+        authPassword.type = isPasswordVisible ? 'text' : 'password';
+        eyeIcon.innerHTML = isPasswordVisible ? '👁️' : '👁️‍🗨️';
+      });
 
-    eyeIcon.addEventListener('mouseenter', () => {
-      eyeIcon.style.opacity = '1';
-    });
+      eyeIcon.addEventListener('mouseenter', () => {
+        eyeIcon.style.opacity = '1';
+      });
 
-    eyeIcon.addEventListener('mouseleave', () => {
-      eyeIcon.style.opacity = '0.6';
-    });
+      eyeIcon.addEventListener('mouseleave', () => {
+        eyeIcon.style.opacity = '0.6';
+      });
+    }
   }
 
   async checkAuthState() {
@@ -44,7 +64,8 @@ class SecurePassPopup {
       const response = await chrome.runtime.sendMessage({ action: 'checkAuth' });
       
       if (response.isAuthenticated) {
-        this.showMainInterface(response.user);
+        // Redirect to dashboard
+        window.location.href = 'dashboard.html';
       } else {
         this.showAuthForm();
       }
@@ -55,13 +76,11 @@ class SecurePassPopup {
 
   showAuthForm() {
     document.getElementById('authForm').classList.remove('hidden');
-    document.getElementById('mainInterface').classList.add('hidden');
   }
 
   showMainInterface(user) {
-    document.getElementById('authForm').classList.add('hidden');
-    document.getElementById('mainInterface').classList.remove('hidden');
-    document.getElementById('userEmail').textContent = user.email;
+    // Redirect to dashboard instead of showing inline interface
+    window.location.href = 'dashboard.html';
   }
 
   toggleAuthMode() {

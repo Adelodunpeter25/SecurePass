@@ -74,6 +74,51 @@ async function passwordRoutes(fastify, options) {
       reply.code(500).send({ error: 'Failed to fetch passwords' });
     }
   });
+
+  fastify.put('/:id', { preHandler: authenticate }, async (request, reply) => {
+    const { id } = request.params;
+    const { website, username, password_blob } = request.body;
+    const { userId } = request.user;
+    
+    try {
+      await new Promise((resolve, reject) => {
+        db.run(
+          'UPDATE passwords SET website = ?, username = ?, password_blob = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ? AND user_id = ?',
+          [website, username, password_blob, id, userId],
+          function(err) {
+            if (err) reject(err);
+            else resolve();
+          }
+        );
+      });
+      
+      reply.send({ success: true });
+    } catch (error) {
+      reply.code(500).send({ error: 'Failed to update password' });
+    }
+  });
+
+  fastify.delete('/:id', { preHandler: authenticate }, async (request, reply) => {
+    const { id } = request.params;
+    const { userId } = request.user;
+    
+    try {
+      await new Promise((resolve, reject) => {
+        db.run(
+          'DELETE FROM passwords WHERE id = ? AND user_id = ?',
+          [id, userId],
+          function(err) {
+            if (err) reject(err);
+            else resolve();
+          }
+        );
+      });
+      
+      reply.send({ success: true });
+    } catch (error) {
+      reply.code(500).send({ error: 'Failed to delete password' });
+    }
+  });
 }
 
 module.exports = passwordRoutes;
