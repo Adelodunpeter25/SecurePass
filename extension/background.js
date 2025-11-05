@@ -68,47 +68,39 @@ class SecurePassBackground {
   }
 
   async checkAuthState() {
-    // Always load fresh from storage
-    await this.loadStoredSession();
+    console.log('Checking auth state...');
+    const result = await chrome.storage.local.get(['authToken', 'masterKey']);
+    console.log('Storage result:', result);
     
-    const result = await chrome.storage.local.get(['isAuthenticated', 'user', 'lastVerified']);
-    
-    if (!this.authToken || !result.isAuthenticated) {
+    if (!result.authToken) {
+      console.log('No auth token found');
       return { isAuthenticated: false, user: null };
     }
 
-    // Check if we verified recently (within last 5 minutes for popup reopens)
-    const now = Date.now();
-    const lastVerified = result.lastVerified || 0;
-    const fiveMinutes = 5 * 60 * 1000;
+    this.authToken = result.authToken;
+    this.masterKey = result.masterKey;
+    console.log('Token loaded:', this.authToken ? 'Yes' : 'No');
 
-    if (now - lastVerified < fiveMinutes) {
-      // Recent verification, skip backend call for popup reopens
-      return { isAuthenticated: true, user: result.user };
-    }
-
-    // Verify with backend for fresh sessions or after 5 minutes
     try {
+      console.log('Verifying with backend...');
       const response = await fetch(`${this.apiUrl}/verify`, {
         headers: {
           'Authorization': `Bearer ${this.authToken}`
         }
       });
 
+      console.log('Verify response status:', response.status);
       if (response.ok) {
         const user = await response.json();
-        // Update last verified timestamp
-        await chrome.storage.local.set({ lastVerified: now });
+        console.log('User verified:', user);
         return { isAuthenticated: true, user };
       } else {
-        // Token invalid, clear session
-        await this.signout();
+        console.log('Token invalid, clearing storage');
+        await chrome.storage.local.clear();
         return { isAuthenticated: false, user: null };
       }
     } catch (error) {
-      // Network error - backend is down, clear session
-      console.error('Backend is not running');
-      await this.signout();
+      console.error('Backend error:', error);
       return { isAuthenticated: false, user: null };
     }
   }
@@ -131,13 +123,9 @@ class SecurePassBackground {
     this.authToken = data.token;
     this.masterKey = password;
 
-    // Store session persistently
     await chrome.storage.local.set({
       authToken: this.authToken,
-      masterKey: this.masterKey,
-      user: { name, email },
-      isAuthenticated: true,
-      lastVerified: Date.now()
+      masterKey: this.masterKey
     });
   }
 
@@ -159,17 +147,26 @@ class SecurePassBackground {
     this.authToken = data.token;
     this.masterKey = password;
 
-    // Store session persistently
     await chrome.storage.local.set({
       authToken: this.authToken,
-      masterKey: this.masterKey,
-      user: { name: data.name, email },
-      isAuthenticated: true,
-      lastVerified: Date.now()
+      masterKey: this.masterKey
     });
   }
 
   async signout() {
+    if (this.authToken) {
+      try {
+        await fetch(`${this.apiUrl}/logout`, {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${this.authToken}`
+          }
+        });
+      } catch (error) {
+        console.error('Logout API call failed:', error);
+      }
+    }
+    
     this.authToken = null;
     this.masterKey = null;
     await chrome.storage.local.clear();

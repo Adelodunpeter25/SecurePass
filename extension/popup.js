@@ -139,24 +139,26 @@ class SecurePassPopup {
     authBtn.style.opacity = '0.7';
 
     try {
-      if (this.isSignupMode) {
-        await chrome.runtime.sendMessage({
-          action: 'signup',
-          name,
-          email,
-          password
-        });
-      } else {
-        await chrome.runtime.sendMessage({
-          action: 'signin',
-          email,
-          password
-        });
+      console.log('Calling background script...');
+      const response = await chrome.runtime.sendMessage({
+        action: this.isSignupMode ? 'signup' : 'signin',
+        name,
+        email,
+        password
+      });
+      
+      console.log('Background response:', response);
+      
+      if (response.error) {
+        throw new Error(response.error);
       }
       
-      this.showMainInterface({ name, email });
+      // Only redirect on successful authentication
+      console.log('Authentication successful, redirecting...');
+      window.location.href = 'dashboard.html';
     } catch (error) {
-      this.showError(error.message);
+      console.error('Auth error:', error);
+      this.showError(error.message || 'Authentication failed');
     } finally {
       // Reset button state
       authBtn.disabled = false;

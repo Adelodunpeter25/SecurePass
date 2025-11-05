@@ -31,7 +31,16 @@ db.serialize(() => {
 
   db.run(`CREATE INDEX IF NOT EXISTS idx_passwords_user_id ON passwords(user_id)`);
   db.run(`CREATE INDEX IF NOT EXISTS idx_passwords_website ON passwords(website)`);
-  db.run(`CREATE INDEX IF NOT EXISTS idx_passwords_user_website ON passwords(user_id, website)`);
+  db.run(`
+    CREATE TABLE IF NOT EXISTS sessions (
+      id TEXT PRIMARY KEY,
+      user_id TEXT NOT NULL,
+      token TEXT NOT NULL,
+      expires_at DATETIME NOT NULL,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE
+    )
+  `);
 });
 
 module.exports = db;
