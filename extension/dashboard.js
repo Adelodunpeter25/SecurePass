@@ -83,15 +83,18 @@ class PasswordDashboard {
   }
 
   filterPasswords(query) {
-    if (!query.trim()) {
+    const searchQuery = query.trim().toLowerCase();
+    
+    if (!searchQuery) {
       this.filteredPasswords = [...this.passwords];
     } else {
-      const lowerQuery = query.toLowerCase();
-      this.filteredPasswords = this.passwords.filter(password => 
-        password.website.toLowerCase().includes(lowerQuery) ||
-        (password.username && password.username.toLowerCase().includes(lowerQuery))
-      );
+      this.filteredPasswords = this.passwords.filter(password => {
+        const website = (password.website || '').toLowerCase();
+        const username = (password.username || '').toLowerCase();
+        return website.includes(searchQuery) || username.includes(searchQuery);
+      });
     }
+    
     this.renderPasswords();
   }
 
@@ -116,12 +119,34 @@ class PasswordDashboard {
           <div class="password-username">${this.escapeHtml(password.username || 'No username')}</div>
         </div>
         <div class="password-actions">
-          <button class="action-btn" onclick="passwordDashboard.copyPassword('${password.id}')" title="Copy password">📋</button>
-          <button class="action-btn" onclick="passwordDashboard.editPassword('${password.id}')" title="Edit">✏️</button>
-          <button class="action-btn" onclick="passwordDashboard.deletePassword('${password.id}')" title="Delete">🗑️</button>
+          <button class="action-btn copy-btn" data-id="${password.id}" title="Copy password">📋</button>
+          <button class="action-btn edit-btn" data-id="${password.id}" title="Edit">✏️</button>
+          <button class="action-btn delete-btn" data-id="${password.id}" title="Delete">🗑️</button>
         </div>
       </div>
     `).join('');
+
+    // Add event listeners to the buttons
+    container.querySelectorAll('.copy-btn').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        this.copyPassword(btn.dataset.id);
+      });
+    });
+
+    container.querySelectorAll('.edit-btn').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        this.editPassword(btn.dataset.id);
+      });
+    });
+
+    container.querySelectorAll('.delete-btn').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        this.deletePassword(btn.dataset.id);
+      });
+    });
   }
 
   showAddModal() {
@@ -293,13 +318,41 @@ class PasswordDashboard {
   }
 
   showError(message) {
-    // You can implement a toast notification here
-    console.error(message);
+    this.showToast(message, 'error');
   }
 
   showSuccess(message) {
-    // You can implement a toast notification here
-    console.log(message);
+    this.showToast(message, 'success');
+  }
+
+  showToast(message, type) {
+    // Remove existing toast
+    const existing = document.querySelector('.toast');
+    if (existing) existing.remove();
+
+    const toast = document.createElement('div');
+    toast.className = `toast toast-${type}`;
+    toast.textContent = message;
+    toast.style.cssText = `
+      position: fixed;
+      top: 20px;
+      right: 20px;
+      padding: 12px 16px;
+      border-radius: 6px;
+      color: white;
+      font-size: 14px;
+      z-index: 10000;
+      animation: slideIn 0.3s ease-out;
+      ${type === 'success' ? 'background: #10b981;' : 'background: #ef4444;'}
+    `;
+
+    document.body.appendChild(toast);
+    
+    setTimeout(() => {
+      if (toast.parentNode) {
+        toast.remove();
+      }
+    }, 3000);
   }
 
   escapeHtml(text) {
