@@ -6,11 +6,7 @@ class SecurePassAutoFill {
   }
 
   async init() {
-    // Check immediately
     this.checkForAutoFill();
-    
-    // Also check after short delays for dynamic forms
-    setTimeout(() => this.checkForAutoFill(), 500);
   }
 
   async checkForAutoFill() {
@@ -56,31 +52,39 @@ class SecurePassAutoFill {
       position: fixed;
       top: 20px;
       right: 20px;
-      background: white;
-      border: 1px solid #e5e7eb;
-      border-radius: 8px;
+      background: #18182b;
+      border: 1px solid #3f3f5e;
+      border-radius: 12px;
       padding: 16px;
-      box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+      box-shadow: 0 8px 24px rgba(0,0,0,0.4);
       z-index: 10000;
       font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
       font-size: 14px;
       max-width: 300px;
+      color: #e4e4e7;
+      animation: slideIn 0.3s ease-out;
     `;
 
     const yesId = 'autoFillYes-' + Date.now();
     const noId = 'autoFillNo-' + Date.now();
 
     prompt.innerHTML = `
+      <style>
+        @keyframes slideIn {
+          from { transform: translateX(100%); opacity: 0; }
+          to { transform: translateX(0); opacity: 1; }
+        }
+      </style>
       <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 12px;">
         <span>🔐</span>
-        <strong>SecurePass</strong>
+        <strong style="color: #e4e4e7; font-weight: 600;">SecurePass</strong>
       </div>
-      <div style="margin-bottom: 12px; color: #374151;">
-        Auto-fill login for <strong>${this.domain}</strong>?
+      <div style="margin-bottom: 14px; color: #a1a1aa; font-size: 13px;">
+        Auto-fill login for <strong style="color: #e4e4e7;">${this.domain}</strong>?
       </div>
       <div style="display: flex; gap: 8px;">
-        <button id="${yesId}" style="background: #667eea; color: white; border: none; padding: 6px 12px; border-radius: 4px; cursor: pointer; font-size: 12px;">Fill</button>
-        <button id="${noId}" style="background: #6b7280; color: white; border: none; padding: 6px 12px; border-radius: 4px; cursor: pointer; font-size: 12px;">Not now</button>
+        <button id="${yesId}" style="background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%); color: white; border: none; padding: 8px 14px; border-radius: 8px; cursor: pointer; font-size: 12px; font-weight: 600; box-shadow: 0 2px 8px rgba(99, 102, 241, 0.3); transition: all 0.2s;">Fill</button>
+        <button id="${noId}" style="background: #27273f; color: #e4e4e7; border: 1px solid #3f3f5e; padding: 8px 14px; border-radius: 8px; cursor: pointer; font-size: 12px; font-weight: 600; transition: all 0.2s;">Not now</button>
       </div>
     `;
 
