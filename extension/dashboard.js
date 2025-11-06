@@ -18,6 +18,16 @@ class PasswordDashboard {
       this.filterPasswords(e.target.value);
     });
 
+    // Health dashboard
+    document.getElementById('healthBtn').addEventListener('click', () => {
+      window.location.href = 'health.html';
+    });
+
+    // Import/Export
+    document.getElementById('importExportBtn').addEventListener('click', () => {
+      this.showImportExportModal();
+    });
+
     // Add password
     document.getElementById('addPasswordBtn').addEventListener('click', () => {
       this.showAddModal();
@@ -353,6 +363,90 @@ class PasswordDashboard {
         toast.remove();
       }
     }, 3000);
+  }
+
+  showImportExportModal() {
+    const modal = document.createElement('div');
+    modal.className = 'modal';
+    modal.innerHTML = `
+      <div class="modal-content">
+        <div class="modal-header">
+          <h3>Import / Export</h3>
+          <button class="close-btn" onclick="this.closest('.modal').remove()">×</button>
+        </div>
+        <div class="modal-body">
+          <button id="exportBtn" class="btn btn-primary" style="margin-bottom: 12px;">Export to CSV</button>
+          <button id="importBtn" class="btn btn-secondary">Import from CSV</button>
+          <input type="file" id="importFile" accept=".csv" style="display: none;">
+        </div>
+      </div>
+    `;
+    document.body.appendChild(modal);
+
+    modal.querySelector('#exportBtn').addEventListener('click', () => this.exportPasswords());
+    modal.querySelector('#importBtn').addEventListener('click', () => {
+      modal.querySelector('#importFile').click();
+    });
+    modal.querySelector('#importFile').addEventListener('change', (e) => this.importPasswords(e));
+  }
+
+  async exportPasswords() {
+    const passwords = [];
+    for (let pwd of this.passwords) {
+      const creds = await chrome.runtime.sendMessage({
+        action: 'getCredentials',
+        domain: pwd.website
+      });
+      passwords.push({
+        name: pwd.website,
+        url: `https://${pwd.website}`,
+        username: pwd.username || '',
+        password: creds?.password || ''
+      });
+    }
+
+    const csv = 'name,url,username,password\n' + passwords.map(p => 
+      `"${p.name}","${p.url}","${p.username}","${p.password}"`
+    ).join('\n');
+
+    const blob = new Blob([csv], { type: 'text/csv' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `securepass-export-${Date.now()}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+    this.showSuccess('Passwords exported successfully!');
+  }
+
+  async importPasswords(event) {
+    const file = event.target.files[0];
+    if (!file) return;
+
+    const text = await file.text();
+    const lines = text.split('\n').slice(1);
+    let imported = 0;
+
+    for (let line of lines) {
+      if (!line.trim()) continue;
+      const match = line.match(/"([^"]*)","([^"]*)","([^"]*)","([^"]*)"/);      if (match) {
+        const [, name, url, username, password] = match;
+        try {
+          const domain = new URL(url).hostname.replace('www.', '');
+          await chrome.runtime.sendMessage({
+            action: 'saveCredentials',
+            data: { domain, username, password }
+          });
+          imported++;
+        } catch (e) {
+          console.error('Import error:', e);
+        }
+      }
+    }
+
+    document.querySelector('.modal').remove();
+    this.showSuccess(`Imported ${imported} passwords!`);
+    await this.loadPasswords();
   }
 
   escapeHtml(text) {

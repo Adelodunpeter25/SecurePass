@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <link rel="stylesheet" href="styles.css">
+  <style>
+    .health-card { background: #18182b; border: 1px solid #27273f; border-radius: 12px; padding: 20px; margin-bottom: 16px; }
+    .health-score { font-size: 48px; font-weight: 700; text-align: center; margin: 20px 0; }
+    .health-score.good { color: #10b981; }
+    .health-score.warning { color: #f59e0b; }
+    .health-score.danger { color: #ef4444; }
+    .health-item { padding: 12px; background: #0f0f1a; border-radius: 8px; margin-bottom: 8px; display: flex; justify-content: space-between; align-items: center; }
+    .health-badge { padding: 4px 8px; border-radius: 6px; font-size: 11px; font-weight: 600; }
+    .health-badge.weak { background: #ef4444; color: white; }
+    .health-badge.reused { background: #f59e0b; color: white; }
+    .health-badge.old { background: #6b7280; color: white; }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <div class="header-content">
+      <h2>🔐 Password Health</h2>
+      <button id="backBtn" class="logout-btn">← Back</button>
+    </div>
+  </div>
+
+  <div style="padding: 20px; overflow-y: auto; height: 400px;">
+    <div class="health-card">
+      <h3 style="margin-bottom: 12px;">Overall Health Score</h3>
+      <div id="healthScore" class="health-score">--</div>
+      <div id="healthSummary" style="text-align: center; color: #a1a1aa; font-size: 13px;"></div>
+    </div>
+
+    <div class="health-card">
+      <h3 style="margin-bottom: 12px;">⚠️ Weak Passwords (<span id="weakCount">0</span>)</h3>
+      <div id="weakList"></div>
+    </div>
+
+    <div class="health-card">
+      <h3 style="margin-bottom: 12px;">🔄 Reused Passwords (<span id="reusedCount">0</span>)</h3>
+      <div id="reusedList"></div>
+    </div>
+
+    <div class="health-card">
+      <h3 style="margin-bottom: 12px;">⏰ Old Passwords (<span id="oldCount">0</span>)</h3>
+      <div id="oldList"></div>
+    </div>
+  </div>
+
+  <script src="health.js"></script>
+</body>
+</html>

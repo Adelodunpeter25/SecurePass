@@ -9,6 +9,18 @@ body {
   overflow: hidden;
 }
 
+@media (max-width: 480px) {
+  body { width: 100vw; min-height: 100vh; }
+  .header { padding: 16px; }
+  .header h2 { font-size: 18px; }
+  .toolbar { flex-wrap: wrap; padding: 12px; }
+  .search-container { width: 100%; margin-bottom: 8px; }
+  .btn { padding: 8px 12px; font-size: 12px; }
+  .password-list { height: calc(100vh - 200px); }
+  .password-item { padding: 12px; margin: 0 8px 6px; }
+  .modal-content { width: 95%; max-width: none; }
+}
+
 /* Header */
 .header {
   background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 50%, #d946ef 100%);

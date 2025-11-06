@@ -37,6 +37,7 @@ class SecurePassPopup {
       authPassword.addEventListener('keypress', (e) => {
         if (e.key === 'Enter') this.handleAuth();
       });
+      authPassword.addEventListener('input', () => this.checkPasswordStrength());
     }
 
     // Eye icon functionality
@@ -86,9 +87,48 @@ class SecurePassPopup {
     window.location.href = 'dashboard.html';
   }
 
+  checkPasswordStrength() {
+    const password = document.getElementById('authPassword').value;
+    const meter = document.getElementById('strengthMeter');
+    const bar = meter.querySelector('.strength-bar');
+    const text = meter.querySelector('.strength-text');
+    
+    if (!password || !this.isSignupMode) {
+      meter.classList.add('hidden');
+      return;
+    }
+    
+    meter.classList.remove('hidden');
+    let strength = 0;
+    
+    if (password.length >= 8) strength++;
+    if (password.length >= 12) strength++;
+    if (/[a-z]/.test(password) && /[A-Z]/.test(password)) strength++;
+    if (/\d/.test(password)) strength++;
+    if (/[^a-zA-Z0-9]/.test(password)) strength++;
+    
+    bar.className = 'strength-bar';
+    text.className = 'strength-text';
+    
+    if (strength <= 2) {
+      bar.classList.add('weak');
+      text.classList.add('weak');
+      text.textContent = 'Weak password';
+    } else if (strength <= 4) {
+      bar.classList.add('medium');
+      text.classList.add('medium');
+      text.textContent = 'Medium strength';
+    } else {
+      bar.classList.add('strong');
+      text.classList.add('strong');
+      text.textContent = 'Strong password';
+    }
+  }
+
   toggleAuthMode() {
     this.isSignupMode = !this.isSignupMode;
     const nameGroup = document.getElementById('nameGroup');
+    const meter = document.getElementById('strengthMeter');
     
     if (this.isSignupMode) {
       document.getElementById('authSubtitle').textContent = 'Sign up to get started';
@@ -104,6 +144,7 @@ class SecurePassPopup {
       document.getElementById('authBtn').textContent = 'Sign In';
       document.getElementById('toggleAuth').textContent = "Don't have an account? Sign up";
       nameGroup.style.display = 'none';
+      meter.classList.add('hidden');
     }
     
     this.clearError();

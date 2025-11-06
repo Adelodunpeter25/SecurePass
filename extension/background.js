@@ -17,9 +17,10 @@ class SecurePassBackground {
   }
 
   async loadStoredSession() {
-    const result = await chrome.storage.local.get(['authToken', 'masterKey']);
+    const result = await chrome.storage.local.get(['authToken', 'masterKey', 'userSalt']);
     this.authToken = result.authToken || null;
     this.masterKey = result.masterKey || null;
+    this.userSalt = result.userSalt || null;
   }
 
   async handleMessage(request, sender, sendResponse) {
@@ -106,12 +107,13 @@ class SecurePassBackground {
   }
 
   async signup(name, email, password) {
+    const salt = this.generateSalt();
     const response = await fetch(`${this.apiUrl}/register`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json'
       },
-      body: JSON.stringify({ name, email, password })
+      body: JSON.stringify({ name, email, password, salt })
     });
 
     if (!response.ok) {
@@ -122,10 +124,12 @@ class SecurePassBackground {
     const data = await response.json();
     this.authToken = data.token;
     this.masterKey = password;
+    this.userSalt = salt;
 
     await chrome.storage.local.set({
       authToken: this.authToken,
-      masterKey: this.masterKey
+      masterKey: this.masterKey,
+      userSalt: salt
     });
   }
 
@@ -146,10 +150,12 @@ class SecurePassBackground {
     const data = await response.json();
     this.authToken = data.token;
     this.masterKey = password;
+    this.userSalt = data.salt;
 
     await chrome.storage.local.set({
       authToken: this.authToken,
-      masterKey: this.masterKey
+      masterKey: this.masterKey,
+      userSalt: data.salt
     });
   }
 
@@ -319,6 +325,12 @@ class SecurePassBackground {
     return new TextDecoder().decode(decrypted);
   }
 
+  generateSalt() {
+    const array = new Uint8Array(16);
+    crypto.getRandomValues(array);
+    return btoa(String.fromCharCode(...array));
+  }
+
   async deriveKey(password) {
     const encoder = new TextEncoder();
     const keyMaterial = await crypto.subtle.importKey(
@@ -329,10 +341,11 @@ class SecurePassBackground {
       ['deriveKey']
     );
     
+    const salt = this.userSalt || 'securepass-salt';
     return crypto.subtle.deriveKey(
       {
         name: 'PBKDF2',
-        salt: encoder.encode('securepass-salt'),
+        salt: encoder.encode(salt),
         iterations: 100000,
         hash: 'SHA-256'
       },

@@ -22,7 +22,7 @@ async function createSession(userId, token) {
 
 async function authRoutes(fastify, options) {
   fastify.post('/register', async (request, reply) => {
-    const { name, email, password } = request.body;
+    const { name, email, password, salt } = request.body;
     
     try {
       const hashedPassword = await bcrypt.hash(password, 10);
@@ -30,8 +30,8 @@ async function authRoutes(fastify, options) {
       
       await new Promise((resolve, reject) => {
         db.run(
-          'INSERT INTO users (id, name, email, password_hash) VALUES (?, ?, ?, ?)',
-          [userId, name, email, hashedPassword],
+          'INSERT INTO users (id, name, email, password_hash, salt) VALUES (?, ?, ?, ?, ?)',
+          [userId, name, email, hashedPassword, salt],
           function(err) {
             if (err) reject(err);
             else resolve();
@@ -42,7 +42,7 @@ async function authRoutes(fastify, options) {
       const token = jwt.sign({ userId, email, name }, JWT_SECRET, { expiresIn: '30d' });
       await createSession(userId, token);
       
-      reply.send({ token, userId, name });
+      reply.send({ token, userId, name, salt });
     } catch (error) {
       reply.code(400).send({ error: 'Registration failed' });
     }
@@ -67,7 +67,7 @@ async function authRoutes(fastify, options) {
       const token = jwt.sign({ userId: user.id, email: user.email, name: user.name }, JWT_SECRET, { expiresIn: '30d' });
       await createSession(user.id, token);
       
-      reply.send({ token, userId: user.id, name: user.name });
+      reply.send({ token, userId: user.id, name: user.name, salt: user.salt });
     } catch (error) {
       reply.code(400).send({ error: 'Login failed' });
     }

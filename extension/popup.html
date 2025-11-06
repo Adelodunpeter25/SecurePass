@@ -123,6 +123,17 @@
     @keyframes spin {
       to { transform: rotate(360deg); }
     }
+    
+    .strength-meter { margin-top: 8px; }
+    .strength-bar { height: 4px; border-radius: 2px; background: #27273f; overflow: hidden; margin-bottom: 4px; }
+    .strength-bar::after { content: ''; display: block; height: 100%; transition: all 0.3s; }
+    .strength-bar.weak::after { width: 33%; background: #ef4444; }
+    .strength-bar.medium::after { width: 66%; background: #f59e0b; }
+    .strength-bar.strong::after { width: 100%; background: #10b981; }
+    .strength-text { font-size: 11px; font-weight: 600; }
+    .strength-text.weak { color: #ef4444; }
+    .strength-text.medium { color: #f59e0b; }
+    .strength-text.strong { color: #10b981; }
   </style>
 </head>
 <body>
@@ -155,7 +166,11 @@
         <label id="passwordLabel">Create Password</label>
         <div style="position: relative;">
           <input type="password" id="authPassword" placeholder="Create a strong password">
-          <div id="eyeIcon" class="eye-btn" style="position: absolute; right: 12px; top: 50%; transform: translateY(-50%);">👁️‍🗨️</div>
+          <div id="eyeIcon" class="eye-btn" style="position: absolute; right: 12px; top: 50%; transform: translateY(-50%);">👁️🗨️</div>
+        </div>
+        <div id="strengthMeter" class="strength-meter hidden">
+          <div class="strength-bar"></div>
+          <div class="strength-text"></div>
         </div>
       </div>
       <button id="authBtn" class="btn btn-primary">Sign Up</button>

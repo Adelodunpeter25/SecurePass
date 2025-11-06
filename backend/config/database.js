@@ -12,9 +12,12 @@ db.serialize(() => {
       name TEXT NOT NULL,
       email TEXT UNIQUE NOT NULL,
       password_hash TEXT NOT NULL,
+      salt TEXT,
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP
     )
   `);
+  
+  db.run(`ALTER TABLE users ADD COLUMN salt TEXT`, () => {});
 
   db.run(`
     CREATE TABLE IF NOT EXISTS passwords (
