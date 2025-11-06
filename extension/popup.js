@@ -63,18 +63,21 @@ class SecurePassPopup {
     try {
       const response = await chrome.runtime.sendMessage({ action: 'checkAuth' });
       
+      await new Promise(resolve => setTimeout(resolve, 1200));
+      
       if (response.isAuthenticated) {
-        // Redirect to dashboard
         window.location.href = 'dashboard.html';
       } else {
         this.showAuthForm();
       }
     } catch (error) {
+      await new Promise(resolve => setTimeout(resolve, 1200));
       this.showAuthForm();
     }
   }
 
   showAuthForm() {
+    document.getElementById('loading').classList.add('hidden');
     document.getElementById('authForm').classList.remove('hidden');
   }
 

@@ -42,7 +42,7 @@
       width: 100%; 
       padding: 12px; 
       border: 1px solid #27273f; 
-      border-radius: 8px;
+      border-radius: 12px;
       font-size: 14px;
       background: #18182b;
       color: #e4e4e7;
@@ -59,7 +59,7 @@
       width: 100%; 
       padding: 12px; 
       border: none; 
-      border-radius: 8px; 
+      border-radius: 12px; 
       cursor: pointer;
       font-size: 14px;
       font-weight: 600;
@@ -110,11 +110,34 @@
       color: #a1a1aa;
     }
     .eye-btn:hover { opacity: 1; color: #e4e4e7; }
+    
+    .spinner {
+      width: 40px;
+      height: 40px;
+      border: 3px solid #27273f;
+      border-top-color: #8b5cf6;
+      border-radius: 50%;
+      animation: spin 1.2s linear infinite;
+    }
+    
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
   </style>
 </head>
 <body>
+  <!-- Loading State -->
+  <div id="loading">
+    <div class="header">
+      <h2>🔐 SecurePass</h2>
+    </div>
+    <div class="container" style="display: flex; align-items: center; justify-content: center; height: 200px;">
+      <div class="spinner"></div>
+    </div>
+  </div>
+
   <!-- Auth Form -->
-  <div id="authForm">
+  <div id="authForm" class="hidden">
     <div class="header">
       <h2>🔐 SecurePass</h2>
       <p id="authSubtitle">Sign up to get started</p>
