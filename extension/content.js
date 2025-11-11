@@ -1,6 +1,7 @@
 class SecurePassContent {
   constructor() {
     this.domain = window.location.hostname;
+    this.currentSuggestion = null;
     this.init();
   }
 
@@ -14,11 +15,11 @@ class SecurePassContent {
     const passwordFields = document.querySelectorAll('input[type="password"]');
     
     passwordFields.forEach(passwordField => {
-      this.addPasswordEyeIcon(passwordField);
+      this.enhancePasswordField(passwordField);
     });
   }
 
-  addPasswordEyeIcon(passwordField) {
+  enhancePasswordField(passwordField) {
     // Skip if already enhanced
     if (passwordField.dataset.securepassEnhanced) return;
     passwordField.dataset.securepassEnhanced = 'true';
@@ -29,18 +30,18 @@ class SecurePassContent {
     passwordField.parentNode.insertBefore(wrapper, passwordField);
     wrapper.appendChild(passwordField);
 
-    // Add eye icon for show/hide password
-    const eyeIcon = this.createEyeIcon();
-    wrapper.appendChild(eyeIcon);
+    // Add SecurePass icon
+    const spIcon = this.createSecurePassIcon();
+    wrapper.appendChild(spIcon);
 
-    let isPasswordVisible = false;
-    eyeIcon.addEventListener('click', (e) => {
-      e.preventDefault();
-      e.stopPropagation();
-      
-      isPasswordVisible = !isPasswordVisible;
-      passwordField.type = isPasswordVisible ? 'text' : 'password';
-      eyeIcon.innerHTML = isPasswordVisible ? '👁️' : '👁️‍🗨️';
+    // Show suggestions on focus
+    passwordField.addEventListener('focus', () => {
+      this.showPasswordSuggestion(passwordField);
+    });
+
+    // Hide suggestions on blur (with delay for clicking)
+    passwordField.addEventListener('blur', () => {
+      setTimeout(() => this.hideSuggestion(), 150);
     });
 
     // Auto-save functionality
@@ -61,10 +62,10 @@ class SecurePassContent {
     }
   }
 
-  createEyeIcon() {
+  createSecurePassIcon() {
     const icon = document.createElement('div');
-    icon.innerHTML = '👁️‍🗨️';
-    icon.title = 'Show password';
+    icon.innerHTML = '🔐';
+    icon.title = 'SecurePass';
     icon.style.cssText = `
       position: absolute;
       right: 12px;
@@ -87,6 +88,186 @@ class SecurePassContent {
     });
 
     return icon;
+  }
+
+  async showPasswordSuggestion(passwordField) {
+    const authState = await this.checkAuthState();
+    if (!authState.isAuthenticated) return;
+
+    // Check if we have existing credentials
+    const existing = await this.getExistingCredentials();
+    
+    // Generate a strong password
+    const suggestedPassword = this.generateStrongPassword();
+    
+    this.currentSuggestion = this.createSuggestionDropdown(passwordField, existing, suggestedPassword);
+  }
+
+  createSuggestionDropdown(passwordField, existingCredentials, suggestedPassword) {
+    // Remove existing dropdown
+    this.hideSuggestion();
+
+    const dropdown = document.createElement('div');
+    dropdown.className = 'securepass-suggestion-dropdown';
+    
+    let content = '';
+    
+    // Show existing password if available
+    if (existingCredentials) {
+      content += `
+        <div class="suggestion-item" data-action="use-existing">
+          <div class="suggestion-icon">🔑</div>
+          <div class="suggestion-text">
+            <div class="suggestion-title">Use saved password</div>
+            <div class="suggestion-subtitle">${existingCredentials.username}</div>
+          </div>
+        </div>
+      `;
+    }
+    
+    // Show generated password suggestion
+    content += `
+      <div class="suggestion-item" data-action="use-generated" data-password="${suggestedPassword}">
+        <div class="suggestion-icon">✨</div>
+        <div class="suggestion-text">
+          <div class="suggestion-title">Use strong password</div>
+          <div class="suggestion-subtitle">${suggestedPassword.substring(0, 8)}...</div>
+        </div>
+      </div>
+    `;
+    
+    dropdown.innerHTML = content;
+    dropdown.style.cssText = `
+      position: absolute;
+      top: 100%;
+      left: 0;
+      right: 0;
+      background: white;
+      border: 1px solid #e5e7eb;
+      border-radius: 8px;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+      z-index: 10001;
+      margin-top: 4px;
+      overflow: hidden;
+    `;
+
+    // Add styles if not exists
+    if (!document.querySelector('#securepass-suggestion-styles')) {
+      const style = document.createElement('style');
+      style.id = 'securepass-suggestion-styles';
+      style.textContent = `
+        .suggestion-item {
+          display: flex;
+          align-items: center;
+          padding: 12px;
+          cursor: pointer;
+          transition: background-color 0.2s;
+          border-bottom: 1px solid #f3f4f6;
+        }
+        .suggestion-item:last-child {
+          border-bottom: none;
+        }
+        .suggestion-item:hover {
+          background-color: #f9fafb;
+        }
+        .suggestion-icon {
+          font-size: 16px;
+          margin-right: 12px;
+        }
+        .suggestion-text {
+          flex: 1;
+        }
+        .suggestion-title {
+          font-size: 14px;
+          font-weight: 500;
+          color: #374151;
+        }
+        .suggestion-subtitle {
+          font-size: 12px;
+          color: #6b7280;
+          margin-top: 2px;
+        }
+      `;
+      document.head.appendChild(style);
+    }
+
+    // Position dropdown
+    const wrapper = passwordField.parentNode;
+    wrapper.style.position = 'relative';
+    wrapper.appendChild(dropdown);
+
+    // Handle clicks
+    dropdown.addEventListener('click', (e) => {
+      const item = e.target.closest('.suggestion-item');
+      if (!item) return;
+
+      const action = item.dataset.action;
+      
+      if (action === 'use-existing' && existingCredentials) {
+        this.fillExistingCredentials(passwordField, existingCredentials);
+      } else if (action === 'use-generated') {
+        const password = item.dataset.password;
+        this.fillGeneratedPassword(passwordField, password);
+      }
+      
+      this.hideSuggestion();
+    });
+
+    return dropdown;
+  }
+
+  async fillExistingCredentials(passwordField, credentials) {
+    const form = passwordField.closest('form');
+    const usernameField = this.findUsernameField(form, passwordField);
+    
+    if (usernameField) {
+      usernameField.value = credentials.username;
+      usernameField.dispatchEvent(new Event('input', { bubbles: true }));
+    }
+    
+    passwordField.value = credentials.password;
+    passwordField.dispatchEvent(new Event('input', { bubbles: true }));
+    
+    this.showNotification('Credentials filled from SecurePass!', 'success');
+  }
+
+  async fillGeneratedPassword(passwordField, password) {
+    passwordField.value = password;
+    passwordField.dispatchEvent(new Event('input', { bubbles: true }));
+    
+    // Auto-save the generated password
+    setTimeout(() => {
+      this.showSavePrompt(passwordField);
+    }, 500);
+    
+    this.showNotification('Strong password generated!', 'success');
+  }
+
+  generateStrongPassword() {
+    const length = 16;
+    const charset = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!@#$%^&*';
+    let password = '';
+    
+    // Ensure at least one of each type
+    password += 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'[Math.floor(Math.random() * 26)]; // uppercase
+    password += 'abcdefghijklmnopqrstuvwxyz'[Math.floor(Math.random() * 26)]; // lowercase
+    password += '0123456789'[Math.floor(Math.random() * 10)]; // number
+    password += '!@#$%^&*'[Math.floor(Math.random() * 8)]; // special
+    
+    // Fill the rest
+    for (let i = 4; i < length; i++) {
+      password += charset[Math.floor(Math.random() * charset.length)];
+    }
+    
+    // Shuffle the password
+    return password.split('').sort(() => Math.random() - 0.5).join('');
+  }
+
+  hideSuggestion() {
+    if (this.currentSuggestion) {
+      this.currentSuggestion.remove();
+      this.currentSuggestion = null;
+    }
   }
 
   async showSavePrompt(passwordField) {
