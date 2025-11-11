@@ -8,6 +8,7 @@ class SecurePassContent {
   init() {
     this.detectPasswordFields();
     this.detectLoginForms();
+    this.checkForAutoFill();
     this.observeFormChanges();
   }
 
@@ -36,6 +37,7 @@ class SecurePassContent {
 
     // Show suggestions on focus
     passwordField.addEventListener('focus', () => {
+      console.log('Password field focused, showing suggestions...');
       this.showPasswordSuggestion(passwordField);
     });
 
@@ -91,14 +93,18 @@ class SecurePassContent {
   }
 
   async showPasswordSuggestion(passwordField) {
+    console.log('showPasswordSuggestion called');
     const authState = await this.checkAuthState();
+    console.log('Auth state:', authState);
     if (!authState.isAuthenticated) return;
 
     // Check if we have existing credentials
     const existing = await this.getExistingCredentials();
+    console.log('Existing credentials:', existing);
     
     // Generate a strong password
     const suggestedPassword = this.generateStrongPassword();
+    console.log('Generated password:', suggestedPassword);
     
     this.currentSuggestion = this.createSuggestionDropdown(passwordField, existing, suggestedPassword);
   }
@@ -560,6 +566,74 @@ class SecurePassContent {
       childList: true,
       subtree: true
     });
+  }
+
+  async checkForAutoFill() {
+    try {
+      const authState = await this.checkAuthState();
+      if (!authState.isAuthenticated) return;
+
+      const existing = await this.getExistingCredentials();
+      if (existing) {
+        this.showAutoFillPrompt(existing);
+      }
+    } catch (error) {
+      console.log('SecurePass: Auto-fill check failed', error);
+    }
+  }
+
+  showAutoFillPrompt(credentials) {
+    const passwordField = document.querySelector('input[type="password"]');
+    const usernameField = this.findUsernameField(passwordField?.closest('form'), passwordField);
+    
+    if (!passwordField || !usernameField) return;
+
+    const prompt = document.createElement('div');
+    prompt.innerHTML = `
+      <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 12px;">
+        <span>🔐</span>
+        <strong>SecurePass</strong>
+      </div>
+      <div style="margin-bottom: 14px; font-size: 13px;">
+        Auto-fill login for <strong>${this.domain}</strong>?
+      </div>
+      <div style="display: flex; gap: 8px;">
+        <button id="autoFillYes" style="background: #6366f1; color: white; border: none; padding: 8px 14px; border-radius: 8px; cursor: pointer; font-size: 12px;">Fill</button>
+        <button id="autoFillNo" style="background: #6b7280; color: white; border: none; padding: 8px 14px; border-radius: 8px; cursor: pointer; font-size: 12px;">Not now</button>
+      </div>
+    `;
+    
+    prompt.style.cssText = `
+      position: fixed;
+      top: 20px;
+      right: 20px;
+      background: white;
+      border: 1px solid #e5e7eb;
+      border-radius: 12px;
+      padding: 16px;
+      box-shadow: 0 8px 24px rgba(0,0,0,0.15);
+      z-index: 10001;
+      font-family: system-ui;
+      font-size: 14px;
+      max-width: 300px;
+    `;
+    
+    document.body.appendChild(prompt);
+    
+    prompt.querySelector('#autoFillYes').addEventListener('click', () => {
+      usernameField.value = credentials.username;
+      passwordField.value = credentials.password;
+      [usernameField, passwordField].forEach(field => {
+        field.dispatchEvent(new Event('input', { bubbles: true }));
+      });
+      prompt.remove();
+    });
+    
+    prompt.querySelector('#autoFillNo').addEventListener('click', () => {
+      prompt.remove();
+    });
+    
+    setTimeout(() => prompt.remove(), 8000);
   }
 }
 
